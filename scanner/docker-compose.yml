@@ -1,0 +1,37 @@
+services:
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.1
+    container_name: moltbook-clickhouse
+    ports:
+      - "8123:8123"  # HTTP interface
+      - "9000:9000"  # Native interface
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+    environment:
+      - CLICKHOUSE_DB=moltbook
+      - CLICKHOUSE_USER=default
+      - CLICKHOUSE_PASSWORD=${CLICKHOUSE_PASSWORD:-}
+    healthcheck:
+      test: ["CMD", "clickhouse-client", "--query", "SELECT 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  scanner:
+    build: .
+    container_name: moltbook-scanner
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    environment:
+      - MOLTBOOK_API_KEY=${MOLTBOOK_API_KEY}
+      - CLICKHOUSE_HOST=${CLICKHOUSE_HOST:-clickhouse}
+      - CLICKHOUSE_PORT=${CLICKHOUSE_PORT:-9000}
+      - CLICKHOUSE_DATABASE=${CLICKHOUSE_DATABASE:-moltbook}
+      - CLICKHOUSE_USER=${CLICKHOUSE_USER:-default}
+      - CLICKHOUSE_PASSWORD=${CLICKHOUSE_PASSWORD:-}
+      - POLL_INTERVAL=${POLL_INTERVAL:-60s}
+    restart: unless-stopped
+
+volumes:
+  clickhouse_data:

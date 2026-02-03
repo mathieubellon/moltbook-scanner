@@ -1,0 +1,67 @@
+services:
+  # ClickHouse database for storing API key findings
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.1
+    container_name: moltbook-clickhouse
+    ports:
+      - "8123:8123"  # HTTP interface
+      - "9000:9000"  # Native interface
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+    environment:
+      - CLICKHOUSE_DB=moltbook
+      - CLICKHOUSE_USER=default
+      - CLICKHOUSE_PASSWORD=${CLICKHOUSE_PASSWORD:-}
+    healthcheck:
+      test: ["CMD", "clickhouse-client", "--query", "SELECT 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Tabix - ClickHouse Web UI
+  tabix:
+    image: spoonest/clickhouse-tabix-web-client:stable
+    container_name: moltbook-tabix
+    ports:
+      - "8080:80"
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Go scanner service - scans Moltbook feed for API keys
+  scanner:
+    build: ./scanner
+    container_name: moltbook-scanner
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    environment:
+      - MOLTBOOK_API_KEY=${MOLTBOOK_API_KEY}
+      - CLICKHOUSE_HOST=clickhouse
+      - CLICKHOUSE_PORT=9000
+      - CLICKHOUSE_DATABASE=moltbook
+      - CLICKHOUSE_USER=default
+      - CLICKHOUSE_PASSWORD=${CLICKHOUSE_PASSWORD:-}
+      - POLL_INTERVAL=${POLL_INTERVAL:-60s}
+    restart: unless-stopped
+
+  # Next.js web app - browse Moltbook feed and view findings
+  web:
+    build: ./web
+    container_name: moltbook-web
+    ports:
+      - "3000:3000"
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    environment:
+      - NODE_ENV=production
+      - CLICKHOUSE_HOST=http://clickhouse:8123
+      - CLICKHOUSE_DATABASE=moltbook
+      - CLICKHOUSE_USER=default
+      - CLICKHOUSE_PASSWORD=${CLICKHOUSE_PASSWORD:-}
+    restart: unless-stopped
+
+volumes:
+  clickhouse_data:
