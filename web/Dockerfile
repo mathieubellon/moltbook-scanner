@@ -4,11 +4,12 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 
 # Install dependencies
-COPY package.json package-lock.json* ./
+# Support both standalone build (from web/) and monorepo build (from root)
+COPY web/package.json web/package-lock.json* ./
 RUN npm ci
 
 # Copy source files
-COPY . .
+COPY web/ .
 
 # Build the Next.js application
 RUN npm run build
